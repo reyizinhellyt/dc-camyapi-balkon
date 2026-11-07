@@ -2,7 +2,7 @@
  * DC Yapı Cam Balkon — orijinal tasarımı değiştirmeyen D1 yönetim adaptörü.
  * admin.html ve mevcut CSS sınıfları korunur.
  * Blog / Galeri: Cloudflare D1 API.
- * Hizmetler / Instagram: henüz D1 endpoint olmadığı için yerel tarayıcı verisi.
+ * Hizmetler, blog ve galeri: Cloudflare D1; Instagram: yerel tarayici verisi.
  * Güvenlik: kimlik doğrulama ve veri değişiklikleri yalnızca sunucu API'sinde.
  */
 (() => {
@@ -13,7 +13,7 @@
   const SERVICE_KEY = window.DC_SERVICES_KEY || 'dcYapiServices';
   const API = '/api/admin';
   const csrfPattern = /^[A-Za-z0-9_-]{43}$/;
-  const state = { posts: [], gallery: [], blogCategories: [], galleryCategories: [], csrf: '', admin: null };
+  const state = { posts: [], gallery: [], services: [], blogCategories: [], galleryCategories: [], csrf: '', admin: null };
   const loginForm = $('loginForm');
   const loginView = $('loginView');
   const dashboard = $('dashboard');
@@ -121,15 +121,17 @@
   }
 
   async function loadContent() {
-    const [cats, posts, gallery] = await Promise.all([
+    const [cats, posts, gallery, services] = await Promise.all([
       fetchApi(`${API}/categories`),
       fetchApi(`${API}/posts`),
       fetchApi(`${API}/gallery`),
+      fetchApi(`${API}/services`),
     ]);
     state.blogCategories = cats.blog || [];
     state.galleryCategories = cats.gallery || [];
     state.posts = posts.items || [];
     state.gallery = gallery.items || [];
+    state.services = services.items || [];
     const gallerySelect = $('galleryCategory');
     const prior = gallerySelect.value;
     gallerySelect.replaceChildren();
@@ -143,6 +145,8 @@
     renderBlog();
     renderGallery();
     renderServices();
+    const storageNote = dashboard.querySelector('.admin-storage-note');
+    if (storageNote) storageNote.textContent = 'Hizmetler, blog ve galeri D1 veritabaninda saklanir. Instagram kayitlari halen bu tarayicidadir.';
   }
 
   async function onAuthenticated() {
@@ -251,9 +255,9 @@
       `${g.category_name || ''} · ${g.is_published ? 'Yayında' : 'Gizli'}`);
   }
   function renderServices() {
-    const services = localRead(SERVICE_KEY, window.DC_DEFAULT_SERVICES || []);
+    const services = state.services;
     $('serviceCount').textContent = String(services.length);
-    renderList('adminServiceList', services, 'service', s => `${s.kicker || 'Hizmet'} · Bu tarayıcıda`);
+    renderList('adminServiceList', services, 'service', s => `${s.kicker || 'Hizmet'} · ${s.is_active ? 'Aktif' : 'Gizli'} · D1`);
   }
 
   // Orijinal form alanları ve görsel URL önizlemeleri.
@@ -460,40 +464,50 @@
     galleryForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  // Hizmetler için mevcut tarayıcı içi işlev korunuyor (D1 şemasında hizmet tablosu yok).
-  serviceForm.addEventListener('submit', event => {
+  // Hizmet kayitlari artik gercek Cloudflare D1 API uzerinden yonetilir.
+  serviceForm.addEventListener('submit', async event => {
     event.preventDefault();
-    const items = localRead(SERVICE_KEY, window.DC_DEFAULT_SERVICES || []);
     const id = $('serviceId').value;
+    const existing = state.services.find(s => String(s.id) === id);
     const image = $('serviceImage').value.trim();
-    const localAsset = /^assets\/services\/[A-Za-z0-9._/-]+\.(?:png|jpe?g|webp)$/i.test(image) && !image.split('/').includes('..');
+    const localAsset = /^assets\/services\/[A-Za-z0-9._/-]+\.(?:png|jpe?g|webp)$/i.test(image) &&
+      !image.split('/').includes('..') && !image.includes('//');
     if (image && !localAsset) {
-      try { const u = new URL(image); if (!['https:', 'http:'].includes(u.protocol)) throw new Error(); }
-      catch { notice('Hizmet görseli için geçerli bir HTTPS URL ya da assets/services/ yolu girin.'); return; }
+      try {
+        const u = new URL(image);
+        if (u.protocol !== 'https:' || u.username || u.password) throw new Error();
+      } catch { notice('HTTPS resim URLsi veya assets/services/ yolu girin.'); return; }
     }
-    const old = items.find(item => String(item.id) === id);
-    const updated = {
-      id: id || `service-${Date.now()}`,
+    const sortOrder = existing ? existing.sort_order :
+      Math.max(0, ...state.services.map(s => Number(s.sort_order) || 0)) + 10;
+    const payload = {
       kicker: $('serviceKicker').value.trim(),
       title: $('serviceTitle').value.trim(),
       description: $('serviceDescription').value.trim(),
-      image, art: old?.art || 'art-custom',
+      image_url: image || null,
+      art: existing?.art || 'art-custom',
+      sort_order: sortOrder,
+      is_active: existing ? existing.is_active : 1,
     };
-    const index = items.findIndex(item => String(item.id) === id);
-    if (index >= 0) items[index] = updated; else items.push(updated);
-    if (localWrite(SERVICE_KEY, items)) {
-      renderServices(); resetService();
-      notice('Hizmet yalnızca bu tarayıcıda kaydedildi. D1 hizmet API henüz kurulmadı.');
-    }
+    try {
+      await fetchApi(`${API}/services${id ? '/' + encodeURIComponent(id) : ''}`, {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      await loadContent();
+      resetService();
+      notice('Hizmet D1 veritabanina kaydedildi.');
+    } catch(e) { notice('Hizmet kaydedilemedi: '+e.message); }
   });
   function editService(id) {
-    const item = localRead(SERVICE_KEY, window.DC_DEFAULT_SERVICES || []).find(s => String(s.id) === String(id));
+    const item = state.services.find(s => String(s.id) === String(id));
     if (!item) return;
     $('serviceId').value = item.id;
     $('serviceKicker').value = item.kicker || '';
     $('serviceTitle').value = item.title || '';
     $('serviceDescription').value = item.description || '';
-    $('serviceImage').value = item.image || '';
+    $('serviceImage').value = item.image_url || '';
     $('serviceFormHeading').textContent = 'Hizmeti düzenle';
     $('cancelServiceEdit').hidden = false;
     openPanel('servicesPanel');
@@ -511,9 +525,12 @@
     }
     if (action !== 'delete') return;
     if (kind === 'service') {
-      if (!confirm('Bu hizmeti yalnızca tarayıcıdaki kayıtlardan silmek istiyor musunuz?')) return;
-      const all = localRead(SERVICE_KEY, window.DC_DEFAULT_SERVICES || []);
-      if (localWrite(SERVICE_KEY, all.filter(s => String(s.id) !== id))) renderServices();
+      if (!confirm('Bu hizmeti D1 veritabanindan kalici olarak silmek istiyor musunuz?')) return;
+      try {
+        await fetchApi(`${API}/services/${encodeURIComponent(id)}`, { method:'DELETE' });
+        await loadContent();
+        notice('Hizmet D1 veritabanindan silindi.');
+      } catch(e) { notice('Hizmet silinemedi: '+e.message); }
       return;
     }
     if (!['blog','gallery'].includes(kind) || !confirm('Bu kaydı D1 veritabanından kalıcı olarak silmek istiyor musunuz?')) return;
@@ -523,7 +540,6 @@
       notice('Kayıt D1 veritabanından silindi.');
     } catch (e) { notice('Silme işlemi başarısız: ' + e.message); }
   });
-  window.addEventListener('storage', event => { if (event.key === SERVICE_KEY && state.admin) renderServices(); });
 
   resetBlog(); resetGallery(); resetService();
   loginError.hidden = true;
