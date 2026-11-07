@@ -3,14 +3,14 @@ document.addEventListener('DOMContentLoaded',()=>{
  if(toggle&&nav)toggle.addEventListener('click',()=>nav.classList.toggle('open'));
  const serviceTrack=document.querySelector('#serviceTrack'),serviceKey=window.DC_SERVICES_KEY||'dcYapiServices';
  const readServices=()=>{try{const raw=localStorage.getItem(serviceKey),items=raw===null?(window.DC_DEFAULT_SERVICES||[]):JSON.parse(raw);return Array.isArray(items)?items:(window.DC_DEFAULT_SERVICES||[])}catch{return window.DC_DEFAULT_SERVICES||[]}};
- const renderServices=()=>{
+ const renderServices=(provided)=>{
   if(!serviceTrack)return;
   const allowedArt=['art-balcony','art-sliding','art-guillotine','art-pergola','art-custom'];
   serviceTrack.replaceChildren();
-  readServices().forEach(service=>{
+  (provided||readServices()).forEach(service=>{
    const card=document.createElement('a');card.className='service-card';card.href='fiyat-teklifi.html';card.setAttribute('aria-label',service.title||'Hizmet');
    const art=document.createElement('div');art.className=`service-art ${allowedArt.includes(service.art)?service.art:'art-custom'}`;
-   const imageSource=String(service.image||'').trim(),localAsset=/^assets\/services\/[A-Za-z0-9._/-]+\.(?:png|jpe?g|webp)$/i.test(imageSource)&&!imageSource.split('/').includes('..');if(/^https?:\/\//i.test(imageSource)||localAsset){const image=document.createElement('img');image.src=imageSource;image.alt=service.title||'Hizmet görseli';image.loading='lazy';image.decoding='async';art.classList.add('service-art-has-image');art.append(image)}
+   const imageSource=String(service.image_url||service.image||'').trim(),localAsset=/^assets\/services\/[A-Za-z0-9._/-]+\.(?:png|jpe?g|webp)$/i.test(imageSource)&&!imageSource.split('/').includes('..');if(/^https?:\/\//i.test(imageSource)||localAsset){const image=document.createElement('img');image.src=imageSource;image.alt=service.title||'Hizmet görseli';image.loading='lazy';image.decoding='async';art.classList.add('service-art-has-image');art.append(image)}
    const info=document.createElement('div');info.className='service-info';
    const kicker=document.createElement('small');kicker.textContent=service.kicker||'';
    const title=document.createElement('h3');title.textContent=service.title||'';
@@ -19,7 +19,15 @@ document.addEventListener('DOMContentLoaded',()=>{
    info.append(kicker,title,description);card.append(art,info);serviceTrack.append(card);
   });
  };
- renderServices();
+ renderServices(window.DC_DEFAULT_SERVICES||[]); // Ag gecikirse sitenin mevcut gorunumu korunur.
+ if(serviceTrack){
+  fetch('/api/public/services',{headers:{'Accept':'application/json'},cache:'no-store'})
+    .then(async response=>{if(!response.ok)throw new Error('API unavailable');return response.json()})
+    .then(data=>{if(data.ok&&Array.isArray(data.items)){renderServices(data.items);requestAnimationFrame(()=>{
+      serviceTrack.dispatchEvent(new Event('scroll'));
+    });}})
+    .catch(error=>console.warn('Hizmetler API kullanilamadi; varsayilan kartlar korundu:',error.message));
+ }
  const home=document.querySelector('.hero')&&document.querySelector('#hizmetler');
  if(home&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
   document.body.classList.add('home-motion-ready');
@@ -40,7 +48,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   next?.addEventListener('click',()=>scrollServices(1));
   serviceTrack.addEventListener('scroll',syncServiceButtons,{passive:true});
   serviceTrack.addEventListener('keydown',event=>{if(event.key==='ArrowRight'){event.preventDefault();scrollServices(1)}else if(event.key==='ArrowLeft'){event.preventDefault();scrollServices(-1)}});
-  window.addEventListener('storage',event=>{if(event.key===serviceKey){renderServices();requestAnimationFrame(syncServiceButtons)}});
   window.addEventListener('resize',syncServiceButtons);
   syncServiceButtons();
  }
