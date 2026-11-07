@@ -1,3 +1,16 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
 (() => {
   const track = document.getElementById('instagramTrack');
   if (!track) return;
@@ -19,14 +32,12 @@
     }
   }
 
-  function readPosts() {
-    try {
-      const raw = localStorage.getItem(key);
-      const value = raw === null ? defaults : JSON.parse(raw);
-      return Array.isArray(value) ? [...new Set(value.map(normalizePost).filter(Boolean))].slice(0, 5) : defaults.map(normalizePost).filter(Boolean).slice(0, 5);
-    } catch {
-      return defaults.map(normalizePost).filter(Boolean).slice(0, 5);
-    }
+  async function readPosts() {
+    const response = await fetch('/api/public/instagram', {cache: 'no-store'});
+    if (!response.ok) throw new Error('Instagram API yanıt vermedi');
+    const data = await response.json();
+    if (!data || data.ok !== true || !Array.isArray(data.items)) throw new Error('Instagram API verisi geçersiz');
+    return [...new Set(data.items.map(item => normalizePost(item.post_url)).filter(Boolean))].slice(0,5);
   }
 
   function syncButtons() {
@@ -50,8 +61,18 @@
     document.head.append(script);
   }
 
-  function renderPosts() {
-    const posts = readPosts();
+  async function renderPosts() {
+    let posts;
+    try { posts = await readPosts(); }
+    catch (error) {
+      track.replaceChildren();
+      const p = document.createElement('p');
+      p.className = 'instagram-empty';
+      p.textContent = 'Instagram gönderileri şu anda yüklenemiyor.';
+      track.append(p);
+      console.warn('Instagram D1 API:', error.message);
+      return;
+    }
     track.replaceChildren();
     if (!posts.length) {
       const empty = document.createElement('p');
@@ -100,7 +121,7 @@
     });
 
     requestAnimationFrame(syncButtons);
-    if (posts.length && window.instgrm?.Embeds) processEmbeds();
+    if (posts.length) processEmbeds();
   }
 
   function scroll(direction) {
@@ -118,9 +139,6 @@
     else if (event.key === 'ArrowLeft') { event.preventDefault(); scroll(-1); }
   });
   window.addEventListener('resize', syncButtons);
-  window.addEventListener('storage', event => {
-    if (event.key === key) renderPosts();
-  });
 
   renderPosts();
   if ('IntersectionObserver' in window && section) {
@@ -135,3 +153,6 @@
     processEmbeds();
   }
 })();
+
+
+
