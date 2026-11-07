@@ -1,47 +1,135 @@
-(()=>{
- const DEMO_USERNAME='davutcanbay',DEMO_PASSWORD='947516';
- const BLOG_KEY='dcYapiBlogPosts',GALLERY_KEY='dcYapiGalleryItems',SERVICE_KEY=window.DC_SERVICES_KEY||'dcYapiServices';
- const $=id=>document.getElementById(id),clone=value=>JSON.parse(JSON.stringify(value));
- const read=(key,fallback)=>{try{const raw=localStorage.getItem(key);return raw===null?clone(fallback):JSON.parse(raw)}catch{return clone(fallback)}};
- const write=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));return true}catch{alert('Tarayıcı depolaması dolu veya kapalı. Görseli daha küçük bir dosyayla deneyin ya da birkaç eski içeriği silin.');return false}};
- const parseTags=value=>[...new Set(String(value||'').split(/[,;،]+/).map(x=>x.trim()).filter(Boolean))].slice(0,15);
- const tagsInput=value=>Array.isArray(value)?value.join(', '):(typeof value==='string'?value:'');
- const blogForm=$('blogPostForm'),galleryForm=$('galleryItemForm'),serviceForm=$('serviceForm');
- const blogImage=createImageField({url:'postImage',data:'postImageData',file:'postImageFile',preview:'postImagePreview',img:'postPreviewImg',name:'postImageFilename',status:'postImageStatus',clear:'clearPostImage',message:'URL girebilir veya cihazınızdan kapak görseli seçebilirsiniz.'});
- const galleryImage=createImageField({url:'galleryImage',data:'galleryImageData',file:'galleryImageFile',preview:'galleryImagePreview',img:'galleryPreviewImg',name:'galleryImageFilename',status:'galleryImageStatus',clear:'clearGalleryImage',message:'URL girebilir veya cihazınızdan bir görsel seçebilirsiniz.'});
- const login=$('loginForm'),loginView=$('loginView'),dashboard=$('dashboard'),error=$('loginError');
- login.addEventListener('submit',event=>{event.preventDefault();if($('adminUser').value.trim()===DEMO_USERNAME&&$('adminPass').value===DEMO_PASSWORD){error.hidden=true;loginView.hidden=true;dashboard.hidden=false;renderAll()}else{error.hidden=false;$('adminPass').value='';$('adminPass').focus()}});
- $('logoutBtn').addEventListener('click',()=>{dashboard.hidden=true;loginView.hidden=false;login.reset();window.scrollTo({top:0,behavior:'smooth'})});
- document.querySelectorAll('.admin-tab').forEach(tab=>tab.addEventListener('click',()=>{document.querySelectorAll('.admin-tab').forEach(x=>x.classList.toggle('active',x===tab));document.querySelectorAll('.admin-content-panel').forEach(panel=>panel.hidden=panel.id!==tab.dataset.panel)}));
- function createImageField(ids){
-  const url=$(ids.url),data=$(ids.data),file=$(ids.file),preview=$(ids.preview),img=$(ids.img),name=$(ids.name),status=$(ids.status),clearButton=$(ids.clear);
-  function hide(){img.onload=null;img.onerror=null;img.removeAttribute('src');name.textContent='';preview.hidden=true}
-  function show(src,label){img.onerror=()=>{hide();status.textContent='Görsel önizlemesi yüklenemedi; URL’yi veya dosyayı kontrol edin.'};img.onload=()=>{preview.hidden=false};name.textContent=label||'Görsel önizlemesi';preview.hidden=false;img.src=src}
-  function reset(){url.value='';data.value='';file.value='';url.setCustomValidity('');hide();status.textContent=ids.message}
-  function setValue(value){const image=value||'';url.setCustomValidity('');if(image.startsWith('data:image/')){url.value='';data.value=image;file.value='';show(image,'Cihazdan seçilmiş görsel');status.textContent='Kaydedilmiş cihaz görseli.'}else{data.value='';file.value='';url.value=image;if(image){show(image,'URL görseli');status.textContent='Kayıtlı URL görseli.'}else{hide();status.textContent=ids.message}}}
-  file.addEventListener('change',async()=>{const chosen=file.files&&file.files[0];if(!chosen)return;if(chosen.type&&!chosen.type.startsWith('image/')){alert('Lütfen bir görsel dosyası seçin.');file.value='';return}file.disabled=true;status.textContent='Görsel hazırlanıyor ve küçültülüyor…';data.value='';url.value='';url.setCustomValidity('');try{const compressed=await compressImage(chosen);data.value=compressed;show(compressed,chosen.name);status.textContent=`${chosen.name} seçildi; görsel küçültülüp bu tarayıcıda saklanmaya hazır.`}catch(err){file.value='';hide();status.textContent=ids.message;alert(err.message||'Görsel işlenemedi.')}finally{file.disabled=false}});
-  url.addEventListener('input',()=>{if(data.value||file.value){data.value='';file.value='';hide()}url.setCustomValidity('');status.textContent=url.value.trim()?'URL görseli kullanılacak.':ids.message});
-  url.addEventListener('change',()=>{const value=url.value.trim();if(value&&url.validity.valid){show(value,'URL görseli');status.textContent='URL görseli önizlemesi.'}});
-  clearButton.addEventListener('click',reset);
-  return{url,data,file,reset,setValue,getValue:()=>data.value||url.value.trim()};
- }
- async function loadImageFile(file){if(typeof createImageBitmap==='function'){try{return await createImageBitmap(file)}catch{}}return new Promise((resolve,reject)=>{const src=URL.createObjectURL(file),img=new Image();img.onload=()=>{URL.revokeObjectURL(src);resolve(img)};img.onerror=()=>{URL.revokeObjectURL(src);reject(new Error('Görsel açılamadı. JPG, PNG veya WebP dosyası deneyin.'))};img.src=src})}
- async function compressImage(file){const image=await loadImageFile(file),width=image.width||image.naturalWidth,height=image.height||image.naturalHeight;if(!width||!height)throw new Error('Görsel boyutları okunamadı.');const steps=[[1600,.80],[1400,.75],[1200,.70],[1000,.64]];try{for(const [max,quality] of steps){const scale=Math.min(1,max/Math.max(width,height)),w=Math.max(1,Math.round(width*scale)),h=Math.max(1,Math.round(height*scale)),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Görsel düzenleyici başlatılamadı.');ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(image,0,0,w,h);const result=canvas.toDataURL('image/jpeg',quality);if(result.length<=1200000)return result}throw new Error('Görsel sıkıştırıldıktan sonra da çok büyük. Daha küçük bir fotoğraf seçin.')}finally{if(typeof image.close==='function')image.close()}}
- function resetBlog(){blogForm.reset();$('blogId').value='';$('postCategory').value='Cam balkon rehberi';$('postDate').value=new Date().toISOString().slice(0,10);$('postTags').value='';blogImage.reset();$('blogFormHeading').textContent='Blog yazısı ekle';$('cancelBlogEdit').hidden=true}
- function resetGallery(){galleryForm.reset();$('galleryId').value='';galleryImage.reset();$('galleryFormHeading').textContent='Galeri öğesi ekle';$('cancelGalleryEdit').hidden=true}
- function resetService(){serviceForm.reset();$('serviceId').value='';$('serviceImage').setCustomValidity('');$('serviceFormHeading').textContent='Hizmet ekle';$('cancelServiceEdit').hidden=true}
- $('cancelBlogEdit').addEventListener('click',resetBlog);$('cancelGalleryEdit').addEventListener('click',resetGallery);$('cancelServiceEdit').addEventListener('click',resetService);
- function button(label,action,id,kind){const b=document.createElement('button');b.type='button';b.className='admin-list-action';b.dataset.action=action;b.dataset.id=id;b.dataset.kind=kind;b.textContent=label;return b}
- function renderBlog(){const list=$('adminBlogList'),posts=read(BLOG_KEY,window.DC_DEFAULT_POSTS||[]);list.replaceChildren();$('blogCount').textContent=posts.length;if(!posts.length){const e=document.createElement('p');e.className='admin-list-empty';e.textContent='Henüz blog yazısı yok.';list.append(e);return}posts.forEach(post=>{const row=document.createElement('article');row.className='admin-list-item';const info=document.createElement('div'),title=document.createElement('b'),meta=document.createElement('small');title.textContent=post.title;meta.textContent=`${post.category||'Cam balkon'} · ${post.date||''}`;info.append(title,meta);const actions=document.createElement('div');actions.className='admin-list-actions';actions.append(button('Düzenle','edit',post.id,'blog'),button('Sil','delete',post.id,'blog'));row.append(info,actions);list.append(row)})}
- function renderGallery(){const list=$('adminGalleryList'),items=read(GALLERY_KEY,window.DC_DEFAULT_GALLERY_ITEMS||[]);list.replaceChildren();$('galleryCount').textContent=items.length;if(!items.length){const e=document.createElement('p');e.className='admin-list-empty';e.textContent='Henüz galeri öğesi yok.';list.append(e);return}items.forEach(item=>{const row=document.createElement('article');row.className='admin-list-item';const info=document.createElement('div'),title=document.createElement('b'),meta=document.createElement('small');title.textContent=item.title;meta.textContent=item.category||'Cam balkon';info.append(title,meta);const actions=document.createElement('div');actions.className='admin-list-actions';actions.append(button('Düzenle','edit',item.id,'gallery'),button('Sil','delete',item.id,'gallery'));row.append(info,actions);list.append(row)})}
- function renderServices(){const list=$('adminServiceList'),items=read(SERVICE_KEY,window.DC_DEFAULT_SERVICES||[]);list.replaceChildren();$('serviceCount').textContent=items.length;if(!items.length){const e=document.createElement('p');e.className='admin-list-empty';e.textContent='Henüz hizmet eklenmedi.';list.append(e);return}items.forEach(service=>{const row=document.createElement('article');row.className='admin-list-item';const info=document.createElement('div'),title=document.createElement('b'),meta=document.createElement('small');title.textContent=service.title;meta.textContent=service.kicker||'Hizmet';info.append(title,meta);const actions=document.createElement('div');actions.className='admin-list-actions';actions.append(button('Düzenle','edit',service.id,'service'),button('Sil','delete',service.id,'service'));row.append(info,actions);list.append(row)})}
- function renderAll(){renderServices();renderBlog();renderGallery()}
- blogForm.addEventListener('submit',event=>{event.preventDefault();const posts=read(BLOG_KEY,window.DC_DEFAULT_POSTS||[]),id=$('blogId').value,item={id:id||(`post-${Date.now()}-${Math.random().toString(16).slice(2,7)}`),title:$('postTitle').value.trim(),category:$('postCategory').value.trim()||'Cam balkon',tags:parseTags($('postTags').value),date:$('postDate').value||new Date().toISOString().slice(0,10),excerpt:$('postExcerpt').value.trim(),content:$('postContent').value.trim(),image:blogImage.getValue()};const at=posts.findIndex(x=>x.id===id);if(at>=0)posts[at]=item;else posts.unshift(item);if(write(BLOG_KEY,posts)){resetBlog();renderBlog()}});
- galleryForm.addEventListener('submit',event=>{event.preventDefault();const image=galleryImage.getValue();if(!image){galleryImage.url.setCustomValidity('Bir fotoğraf URL’si girin veya cihazınızdan görsel seçin.');galleryImage.url.reportValidity();return}if(!galleryImage.data.value&&!galleryImage.url.checkValidity()){galleryImage.url.reportValidity();return}const items=read(GALLERY_KEY,window.DC_DEFAULT_GALLERY_ITEMS||[]),id=$('galleryId').value,item={id:id||(`gallery-${Date.now()}-${Math.random().toString(16).slice(2,7)}`),title:$('galleryTitle').value.trim(),category:$('galleryCategory').value,image,caption:$('galleryCaption').value.trim()};const at=items.findIndex(x=>x.id===id);if(at>=0)items[at]=item;else items.unshift(item);if(write(GALLERY_KEY,items)){resetGallery();renderGallery()}});
- serviceForm.addEventListener('submit',event=>{event.preventDefault();const items=read(SERVICE_KEY,window.DC_DEFAULT_SERVICES||[]),id=$('serviceId').value,image=$('serviceImage').value.trim(),localAsset=/^assets\/services\/[A-Za-z0-9._/-]+\.(?:png|jpe?g|webp)$/i.test(image)&&!image.split('/').includes('..');if(image&&!localAsset){try{const url=new URL(image);if(!['http:','https:'].includes(url.protocol))throw new Error('invalid protocol')}catch{$('serviceImage').setCustomValidity('Yerel assets/services/ yolu ya da http:// veya https:// ile başlayan görsel adresi girin.');$('serviceImage').reportValidity();return}}$('serviceImage').setCustomValidity('');const existing=items.find(x=>x.id===id),item={id:id||(`service-${Date.now()}-${Math.random().toString(16).slice(2,7)}`),kicker:$('serviceKicker').value.trim(),title:$('serviceTitle').value.trim(),description:$('serviceDescription').value.trim(),art:existing?.art||'art-custom',image};const at=items.findIndex(x=>x.id===id);if(at>=0)items[at]=item;else items.push(item);if(write(SERVICE_KEY,items)){resetService();renderServices()}});
- function fillService(id){const item=read(SERVICE_KEY,window.DC_DEFAULT_SERVICES||[]).find(x=>x.id===id);if(!item)return;$('serviceId').value=item.id;$('serviceKicker').value=item.kicker||'';$('serviceTitle').value=item.title||'';$('serviceDescription').value=item.description||'';$('serviceImage').value=item.image||'';$('serviceImage').setCustomValidity('');$('serviceFormHeading').textContent='Hizmeti düzenle';$('cancelServiceEdit').hidden=false;document.querySelector('[data-panel="servicesPanel"]').click();serviceForm.scrollIntoView({behavior:'smooth',block:'start'})}
- function fillBlog(id){const item=read(BLOG_KEY,window.DC_DEFAULT_POSTS||[]).find(x=>x.id===id);if(!item)return;$('blogId').value=item.id;$('postTitle').value=item.title;$('postCategory').value=item.category||'';$('postTags').value=tagsInput(item.tags);$('postDate').value=item.date||'';$('postExcerpt').value=item.excerpt;$('postContent').value=item.content;blogImage.setValue(item.image||'');$('blogFormHeading').textContent='Blog yazısını düzenle';$('cancelBlogEdit').hidden=false;document.querySelector('[data-panel="blogPanel"]').click();blogForm.scrollIntoView({behavior:'smooth',block:'start'})}
- function fillGallery(id){const item=read(GALLERY_KEY,window.DC_DEFAULT_GALLERY_ITEMS||[]).find(x=>x.id===id);if(!item)return;$('galleryId').value=item.id;$('galleryTitle').value=item.title;$('galleryCategory').value=item.category||'Cam balkon';$('galleryCaption').value=item.caption||'';galleryImage.setValue(item.image||'');$('galleryFormHeading').textContent='Galeri öğesini düzenle';$('cancelGalleryEdit').hidden=false;document.querySelector('[data-panel="galleryPanel"]').click();galleryForm.scrollIntoView({behavior:'smooth',block:'start'})}
- document.addEventListener('click',event=>{const b=event.target.closest('.admin-list-action');if(!b||!b.dataset.action)return;const kind=b.dataset.kind,id=b.dataset.id,key=kind==='blog'?BLOG_KEY:kind==='gallery'?GALLERY_KEY:SERVICE_KEY,fallback=kind==='blog'?(window.DC_DEFAULT_POSTS||[]):kind==='gallery'?(window.DC_DEFAULT_GALLERY_ITEMS||[]):(window.DC_DEFAULT_SERVICES||[]);let items=read(key,fallback);if(b.dataset.action==='edit'){if(kind==='blog')fillBlog(id);else if(kind==='gallery')fillGallery(id);else fillService(id);return}if(!confirm('Bu içeriği bu tarayıcının yerel kayıtlarından silmek istiyor musunuz?'))return;items=items.filter(x=>x.id!==id);if(write(key,items)){if(kind==='blog')renderBlog();else if(kind==='gallery')renderGallery();else renderServices()}});
- window.addEventListener('storage',renderAll);resetBlog();resetGallery();resetService();
+/*
+ * DC Yapı Cam Balkon — tasarımı değiştirmeden güvenli D1 girişi (v11)
+ * Kullanım: GitHub projesinin kökündeki admin.js içeriğini bununla değiştirin.
+ * admin.html / CSS / logo / sayfa düzeni değişmez.
+ * /api/admin/login ile aynı alan adı üzerinden çalışır.
+ */
+(() => {
+  'use strict';
+  const LOGIN = '/api/admin/login';
+  const DASHBOARD = '/api/admin/dashboard';
+
+  function ready(fn) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', fn, { once: true });
+    } else fn();
+  }
+
+  function allLeafNodes() {
+    return [...document.querySelectorAll('p, small, span, div, label, strong, h1, h2, h3, h4, h5, h6')]
+      .filter(el => el.children.length === 0 && (el.textContent || '').trim());
+  }
+
+  function removeLegacyMessages() {
+    for (const el of allLeafNodes()) {
+      const value = (el.textContent || '').trim();
+      if (/^Yerel demo bilgilendirmesi$/i.test(value)) {
+        el.textContent = 'Güvenli yönetici girişi';
+      } else if (/giriş bilgileri tarayıcı tarafında doğrulanır/i.test(value)) {
+        el.textContent = 'Giriş bilgileriniz güvenli Cloudflare API üzerinden doğrulanır.';
+      }
+    }
+  }
+
+  function findForm() {
+    return [...document.forms].find(form => form.querySelector('input[type="password"]')) || null;
+  }
+
+  function findError(form) {
+    const known = ['[data-login-error]', '#loginError', '#login-error', '#authError',
+      '#errorMessage', '#loginMessage', '#adminError', '.login-error',
+      '.auth-error', '.form-error', '[role="alert"]'];
+    for (const selector of known) {
+      const el = form.querySelector(selector) || document.querySelector(selector);
+      if (el) return el;
+    }
+    // Varsa eski demo girişinin ekranda bıraktığı hata satırını yeniden kullan.
+    for (const el of allLeafNodes()) {
+      if (/kullanıcı adı (veya|ya da) (şifre|parola) hatalı/i.test(el.textContent || '')) {
+        return el;
+      }
+    }
+    const el = document.createElement('p');
+    el.setAttribute('role', 'alert');
+    el.style.cssText = 'color:#c65345;font-size:13px;margin-top:10px;';
+    const button = form.querySelector('button[type="submit"], input[type="submit"], button');
+    if (button) button.insertAdjacentElement('afterend', el);
+    else form.append(el);
+    return el;
+  }
+
+  async function fetchLoginToken() {
+    const response = await fetch(LOGIN, {
+      method: 'GET', credentials: 'same-origin', cache: 'no-store'
+    });
+    // Zaten oturum açıksa giriş formuna dönmeden panele git.
+    if (response.redirected && new URL(response.url).pathname === DASHBOARD) {
+      location.assign(DASHBOARD);
+      return null;
+    }
+    if (!response.ok) throw new Error('Giriş güvenlik bilgileri alınamadı. Sayfayı yenileyin.');
+    const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+    const token = page.querySelector('input[name="_csrf"]')?.value || '';
+    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
+      throw new Error('CSRF doğrulama bilgisi alınamadı. API sürümünü kontrol edin.');
+    }
+    return token;
+  }
+
+  async function login(username, password) {
+    const csrf = await fetchLoginToken();
+    if (!csrf) return;
+    const body = new URLSearchParams({ username, password, _csrf: csrf });
+    const response = await fetch(LOGIN, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+      body: body.toString(),
+      redirect: 'follow',
+      cache: 'no-store'
+    });
+    if (response.ok && new URL(response.url).pathname === DASHBOARD) {
+      location.assign(DASHBOARD);
+      return;
+    }
+    if (response.status === 401) throw new Error('Kullanıcı adı veya parola hatalı.');
+    if (response.status === 429) throw new Error('Çok fazla deneme. Bir süre sonra yeniden deneyin.');
+    if (response.status === 403) throw new Error('Güvenlik kontrolü başarısız. Sayfayı yenileyin.');
+    throw new Error('Giriş başarısız (HTTP ' + response.status + ').');
+  }
+
+  ready(() => {
+    removeLegacyMessages();
+    const form = findForm();
+    if (!form) { console.warn('DC Yapı: giriş formu bulunamadı.'); return; }
+    const username = form.querySelector('input[name="username"], input[id="username"], input[autocomplete="username"], input[type="text"], input:not([type])');
+    const password = form.querySelector('input[type="password"]');
+    if (!username || !password) { console.warn('DC Yapı: giriş alanları bulunamadı.'); return; }
+    const error = findError(form);
+    const submit = form.querySelector('button[type="submit"], input[type="submit"], button');
+    error.textContent = '';
+    error.hidden = true;
+    error.style.display = 'none';
+    console.info('DC Yapı güvenli giriş adaptörü v11 yüklendi.');
+
+    // Capture aşamasında eski demo form handler'ının çalışmasını önler.
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (submit?.disabled) return;
+      error.hidden = true;
+      error.style.display = 'none';
+      error.textContent = '';
+      if (submit) submit.disabled = true;
+      try {
+        await login(username.value.trim(), password.value);
+      } catch (err) {
+        error.textContent = err?.message || 'Giriş sırasında bir hata oluştu.';
+        error.hidden = false;
+        error.style.display = '';
+      } finally {
+        if (submit) submit.disabled = false;
+      }
+    }, true);
+  });
 })();
