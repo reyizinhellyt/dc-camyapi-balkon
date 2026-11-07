@@ -2,7 +2,7 @@
  * DC Yapı Cam Balkon — orijinal tasarımı değiştirmeyen D1 yönetim adaptörü.
  * admin.html ve mevcut CSS sınıfları korunur.
  * Blog / Galeri: Cloudflare D1 API.
- * Hizmetler, blog ve galeri: Cloudflare D1; Instagram: yerel tarayici verisi.
+ * Hizmetler/blog/galeri/Instagram D1; dosyalar Cloudflare R2.
  * Güvenlik: kimlik doğrulama ve veri değişiklikleri yalnızca sunucu API'sinde.
  */
 (() => {
@@ -146,7 +146,7 @@
     renderGallery();
     renderServices();
     const storageNote = dashboard.querySelector('.admin-storage-note');
-    if (storageNote) storageNote.textContent = 'Hizmetler, blog ve galeri D1 veritabaninda saklanir. Instagram kayitlari halen bu tarayicidadir.';
+    if (storageNote) storageNote.textContent = 'Hizmetler, blog, galeri ve Instagram D1 ile yönetilir. Görseller ve yüklenen belgeler R2 üzerinde saklanır.';
   }
 
   async function onAuthenticated() {
@@ -199,6 +199,82 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) { notice('Çıkış işlemi: ' + e.message); }
   });
+
+
+  // 'Dosyalar' tab is constructed using existing design classes.
+  function activateFilesTab() {
+    const tabs = dashboard.querySelector('.admin-tabs');
+    const lastPanel = $('instagramPanel');
+    if (!tabs || !lastPanel) return;
+    const tab = document.createElement('button');
+    tab.type='button'; tab.className='admin-tab';tab.dataset.panel='r2FilesPanel';
+    tab.textContent='Dosyalar (R2)';
+    tabs.append(tab);
+    const panel = document.createElement('section');
+    panel.id='r2FilesPanel'; panel.className='admin-content-panel'; panel.hidden=true;
+    panel.innerHTML = `<div class="admin-columns">
+      <form id="r2FilesForm" class="admin-form">
+        <h2>R2 dosya yükle</h2>
+        <p class="form-note">Görseller: JPG, PNG, WEBP, GIF (8 MB). Belgeler: PDF, DOCX, XLSX, TXT (10 MB). Belgelere yalnızca yönetici erişir.</p>
+        <label class="field-label" for="r2DocumentFile">Dosya seç</label>
+        <input id="r2DocumentFile" type="file" required accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx,.xlsx,.txt">
+        <div class="admin-form-actions"><button type="submit" class="button button-red">R2’ye yükle →</button></div>
+        <p id="r2FilesStatus" class="form-note" role="status"></p>
+      </form>
+      <div class="admin-list-wrap"><h2>Yüklenen dosyalar</h2>
+        <div id="r2FilesList" class="admin-list"></div>
+      </div>
+    </div>`;
+    lastPanel.insertAdjacentElement('afterend',panel);
+    const form=panel.querySelector('#r2FilesForm');
+    const status=panel.querySelector('#r2FilesStatus');
+    const list=panel.querySelector('#r2FilesList');
+    async function reloadFiles() {
+      const data=await fetchApi(`${API}/uploads`);
+      list.replaceChildren();
+      if (!data.items.length){list.textContent='Henüz dosya yüklenmedi.';return;}
+      for (const asset of data.items) {
+        const row=document.createElement('article');row.className='admin-list-item';
+        const detail=document.createElement('div');
+        const name=document.createElement('b');name.textContent=asset.name;
+        const small=document.createElement('small');
+        small.textContent=`${asset.kind==='image'?'Görsel':'Özel belge'} · ${(asset.size/1024/1024).toFixed(2)} MB`;
+        detail.append(name,small);
+        const actions=document.createElement('div');actions.className='admin-list-actions';
+        if(asset.kind==='image') {
+          const link=document.createElement('a');link.className='admin-list-action';
+          link.textContent='Görseli aç';link.href=asset.url;link.target='_blank';link.rel='noopener';
+          const copy=document.createElement('button');copy.className='admin-list-action';
+          copy.type='button';copy.textContent='URL kopyala';
+          copy.onclick=async()=>{try{await navigator.clipboard.writeText(asset.url);status.textContent='Görsel URL kopyalandı.';}catch{status.textContent=asset.url;}};
+          actions.append(link,copy);
+        } else {
+          const link=document.createElement('a');link.className='admin-list-action';
+          link.textContent='İndir (giriş gerekli)';link.href=asset.download_url;
+          actions.append(link);
+        }
+        row.append(detail,actions);list.append(row);
+      }
+    }
+    tab.addEventListener('click',()=>reloadFiles().catch(e=>status.textContent=e.message));
+    form.addEventListener('submit', async e => {
+      e.preventDefault();const input=panel.querySelector('#r2DocumentFile');
+      const file=input.files?.[0];if(!file)return;
+      if(file.size>10*1024*1024){status.textContent='10 MB sınırı aşıldı.';return;}
+      const button=form.querySelector('[type="submit"]');button.disabled=true;
+      const body=new FormData();body.set('file',file,file.name);
+      status.textContent='R2’ye yükleniyor...';
+      try {
+        const data=await fetchApi(`${API}/upload`,{method:'POST',body});
+        status.textContent = data.kind==='image'
+          ? 'Görsel yüklendi. Görsel bağlantısı aşağıdaki listeden kopyalanabilir.'
+          : 'Belge yüklendi. Bu belge yalnızca admin oturumuyla indirilebilir.';
+        input.value='';await reloadFiles();
+      } catch(err) {status.textContent='Yükleme başarısız: '+err.message;}
+      finally{button.disabled=false;}
+    });
+  }
+  activateFilesTab();
 
   // Var olan sekmelerin HTML / CSS yapısını değiştirme.
   document.querySelectorAll('.admin-tab').forEach(tab => tab.addEventListener('click', () => {
@@ -260,49 +336,115 @@
     renderList('adminServiceList', services, 'service', s => `${s.kicker || 'Hizmet'} · ${s.is_active ? 'Aktif' : 'Gizli'} · D1`);
   }
 
-  // Orijinal form alanları ve görsel URL önizlemeleri.
+  // R2 upload, existing HTML/CSS elements remain unchanged.
   function imageField(kind) {
     const names = kind === 'post'
       ? {url:'postImage', data:'postImageData', file:'postImageFile', preview:'postImagePreview', img:'postPreviewImg', name:'postImageFilename', status:'postImageStatus', clear:'clearPostImage'}
       : {url:'galleryImage', data:'galleryImageData', file:'galleryImageFile', preview:'galleryImagePreview', img:'galleryPreviewImg', name:'galleryImageFilename', status:'galleryImageStatus', clear:'clearGalleryImage'};
     const input = $(names.url), file = $(names.file), status = $(names.status);
     const preview = $(names.preview), image = $(names.img), filename = $(names.name);
-    // D1 veritabanı dosya saklamaz; R2 henüz bağlanmadığından dosya yüklemeyi açık tutmuyoruz.
-    file.disabled = true;
-    file.value = '';
-    $(names.data).value = '';
     const fileLabel = document.querySelector(`label[for="${names.file}"]`);
+    file.disabled = false;
+    file.accept = '.jpg,.jpeg,.png,.webp,.gif';
     if (fileLabel) {
-      fileLabel.textContent = 'Dosyadan yükleme (R2 yakında)';
-      fileLabel.title = 'Görsel yükleme henüz aktif değil; HTTPS URL kullanın.';
-      fileLabel.style.opacity = '.65';
-      fileLabel.style.cursor = 'not-allowed';
+      fileLabel.textContent = 'R2 ile görsel yükle';
+      fileLabel.title = '8 MB altında PNG/JPG/WEBP/GIF görsel seçin';
+      fileLabel.style.opacity = '';
+      fileLabel.style.cursor = 'pointer';
     }
+    let busy = false;
     function reset() {
+      if (busy) return;
       input.value = '';
+      file.value = '';
       $(names.data).value = '';
       image.removeAttribute('src');
       preview.hidden = true;
       filename.textContent = '';
-      status.textContent = 'Şimdilik yalnızca HTTPS görsel bağlantısı kullanılır.';
+      status.textContent = 'Görsel URL girin veya cihazdan R2’ye yükleyin (8 MB).';
     }
     function setValue(value) {
       reset();
       input.value = value || '';
       if (value) {
         image.onload = () => { preview.hidden = false; };
-        image.onerror = () => { preview.hidden = true; status.textContent = 'Görsel açılamadı, URL’yi kontrol edin.'; };
+        image.onerror = () => { preview.hidden = true; status.textContent = 'Görsel önizlenemedi.'; };
         image.src = value;
-        filename.textContent = 'URL görseli';
+        filename.textContent = 'Yüklenen görsel';
       }
     }
     input.addEventListener('change', () => setValue(input.value.trim()));
     $(names.clear).addEventListener('click', reset);
+    file.addEventListener('change', async () => {
+      const chosen = file.files?.[0];
+      if (!chosen) return;
+      if (chosen.size > 8*1024*1024) { status.textContent = 'Görsel 8 MB sınırını aşıyor.'; file.value=''; return; }
+      const data = new FormData();
+      data.append('file', chosen, chosen.name);
+      busy = true;
+      file.disabled = true;
+      status.textContent = 'R2’ye yükleniyor: ' + chosen.name;
+      try {
+        const result = await fetchApi(`${API}/upload`, {method:'POST', body:data});
+        if (result.kind !== 'image' || !result.url) throw new Error('Görsel URL alınamadı.');
+        busy = false;
+        setValue(result.url);
+        filename.textContent = chosen.name;
+        status.textContent = 'Görsel R2’ye yüklendi. İçeriği kaydetmek için Kaydet’e basın.';
+      } catch (error) {
+        status.textContent = 'Yükleme başarısız: ' + error.message;
+        notice('R2 yükleme hatası: ' + error.message);
+      } finally {
+        busy = false;
+        file.disabled = false;
+        file.value = '';
+      }
+    });
     reset();
-    return { reset, setValue, url: () => input.value.trim() };
+    return {reset,setValue,url:()=>input.value.trim()};
   }
   const blogImage = imageField('post');
   const galleryImage = imageField('gallery');
+  for (const note of galleryForm.querySelectorAll('.form-note')) {
+    if (note.textContent.includes('R2 kurulumu') || note.textContent.includes('şimdilik HTTPS')) {
+      note.textContent = 'Görseller R2 üzerine yüklenir ve içerik kaydedildiğinde sitede görünür.';
+    }
+  }
+
+
+  function activateServiceUpload() {
+    const textInput = $('serviceImage');
+    if (!textInput) return;
+    const control = document.createElement('div');
+    control.className = 'gallery-upload-controls';
+    const label = document.createElement('label');
+    label.className = 'button button-outline-dark upload-select-button';
+    label.htmlFor = 'serviceImageFileR2';
+    label.textContent = 'R2 ile hizmet görseli yükle';
+    const field = document.createElement('input');
+    field.id = 'serviceImageFileR2'; field.type='file'; field.hidden=true;
+    field.accept = '.jpg,.jpeg,.png,.webp,.gif';
+    const note = document.createElement('span');
+    note.className='form-note'; note.setAttribute('role','status');
+    note.textContent = '8 MB altında görsel yükleyebilirsiniz.';
+    control.append(label, field, note);
+    textInput.insertAdjacentElement('afterend', control);
+    field.addEventListener('change', async () => {
+      const file=field.files?.[0]; if (!file) return;
+      if (file.size > 8*1024*1024) {note.textContent='Görsel 8 MB sınırını aşıyor.';field.value='';return;}
+      const body = new FormData(); body.set('file',file,file.name);
+      field.disabled=true; note.textContent = 'R2’ye yükleniyor...';
+      try {
+        const result = await fetchApi(`${API}/upload`,{method:'POST',body});
+        if (!result.url || result.kind !== 'image') throw new Error('Görsel URL alınamadı');
+        textInput.value=result.url;
+        note.textContent='R2’ye yüklendi. Hizmeti kaydetmek için Kaydet’e basın.';
+      } catch(e) {note.textContent='Yüklenemedi: '+e.message;}
+      finally {field.disabled=false;field.value='';}
+    });
+  }
+  activateServiceUpload();
+
 
   // Yayın durumu, mevcut CSS sınıfları ile orijinal formun içine eklenir.
   function addStatusField(form, id, label, items) {
