@@ -1,0 +1,44 @@
+/* DC Yapı Cam Balkon | Orijinal tam ekran galeri düzeltmesi
+   Bu dosya galeri.html içinde modern-theme.css dosyasından SONRA eklenmelidir.
+   Sadece galeri açılır görüntüleyicisini etkiler. API / R2 / admin kodunu değiştirmez. */
+
+dialog.gallery-lightbox {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  margin: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  color: #fff;
+  background: rgba(0, 0, 0, .70);
+  box-shadow: none;
+}
+
+dialog.gallery-lightbox::backdrop {
+  background: rgba(0, 0, 0, .08);
+  backdrop-filter: blur(2px);
+}
+
+/* modern-theme.css tarafindan kucultulen kontrol dugmelerini geri al. */
+dialog.gallery-lightbox .lightbox-button {
+  width: 46px;
+  height: 46px;
+  border: 1px solid #ffffff55;
+  border-radius: 50%;
+  background: #ffffff14;
+  color: #fff;
+}
+
+@media (max-width: 650px) {
+  dialog.gallery-lightbox .lightbox-button {
+    width: 38px;
+    height: 38px;
+  }
+}
