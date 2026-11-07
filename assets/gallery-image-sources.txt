@@ -1,0 +1,5 @@
+Galeri görseli kaynakları (kullanıcı tarafından sağlanan URL’ler)
+
+assets/gallery-project-1.webp <- https://ekincilercambalkon.tr/uploads/gallery/4c28168a33bc6c58.webp
+assets/gallery-project-2.webp <- https://ekincilercambalkon.tr/uploads/gallery/fe97638926363b36.webp
+assets/gallery-project-3.webp <- https://ekincilercambalkon.tr/uploads/gallery/0aabae16470d0100.webp

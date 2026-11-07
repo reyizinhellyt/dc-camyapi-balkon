@@ -1,0 +1,120 @@
+{
+  "routes": [
+    {
+      "path": "/",
+      "title": "DC Yapı Cam Balkon"
+    },
+    {
+      "path": "/fiyat-teklifi.html",
+      "title": "Fiyat Teklifi"
+    },
+    {
+      "path": "/iletisim.html",
+      "title": "İletişim"
+    },
+    {
+      "path": "/blog.html",
+      "title": "Blog"
+    },
+    {
+      "path": "/galeri.html",
+      "title": "Galeri"
+    },
+    {
+      "path": "/admin.html",
+      "title": "Yönetim Paneli"
+    },
+    {
+      "path": "/gizlilik-politikasi.html",
+      "title": "Gizlilik Politikası"
+    },
+    {
+      "path": "/kvkk-aydinlatma.html",
+      "title": "KVKK Aydınlatma Metni"
+    },
+    {
+      "path": "/cerez-politikasi.html",
+      "title": "Çerez Politikası"
+    },
+    {
+      "path": "/kullanim-kosullari.html",
+      "title": "Kullanım Koşulları"
+    },
+    {
+      "path": "/erisilebilirlik.html",
+      "title": "Erişilebilirlik Beyanı"
+    },
+    {
+      "path": "/isicamli-cam-balkon.html",
+      "title": "Isıcamlı cam balkon"
+    },
+    {
+      "path": "/giyotin-cam-sistemleri.html",
+      "title": "Giyotin cam sistemleri"
+    },
+    {
+      "path": "/surme-cam-sistemleri.html",
+      "title": "Sürme cam sistemleri"
+    },
+    {
+      "path": "/katlanir-cam-balkon.html",
+      "title": "Katlanır cam balkon"
+    },
+    {
+      "path": "/pergole-kis-bahcesi.html",
+      "title": "Pergole & kış bahçesi"
+    },
+    {
+      "path": "/kis-bahcesi.html",
+      "title": "Kış bahçesi"
+    },
+    {
+      "path": "/dusakabin.html",
+      "title": "Duşakabin"
+    },
+    {
+      "path": "/aluminyum-dograma.html",
+      "title": "Alüminyum doğrama"
+    },
+    {
+      "path": "/balkon-kapatma-camlama.html",
+      "title": "Balkon kapatma & camlama"
+    },
+    {
+      "path": "/otomatik-pergola.html",
+      "title": "Otomatik pergola"
+    },
+    {
+      "path": "/hizmet-bolgeleri.html",
+      "title": "Tüm hizmet bölgeleri"
+    },
+    {
+      "path": "/osmangazi-cam-balkon.html",
+      "title": "Osmangazi cam balkon"
+    },
+    {
+      "path": "/nilufer-cam-balkon.html",
+      "title": "Nilüfer cam balkon"
+    },
+    {
+      "path": "/yildirim-cam-balkon.html",
+      "title": "Yıldırım cam balkon"
+    },
+    {
+      "path": "/mudanya-cam-balkon.html",
+      "title": "Mudanya cam balkon"
+    },
+    {
+      "path": "/gursu-cam-balkon.html",
+      "title": "Gürsu cam balkon"
+    },
+    {
+      "path": "/kestel-cam-balkon.html",
+      "title": "Kestel cam balkon"
+    },
+    {
+      "path": "/inegol-cam-balkon.html",
+      "title": "İnegöl cam balkon"
+    }
+  ]
+}
