@@ -1,75 +1,100 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* DC Yapı Cam Balkon — Instagram yönetimi; orijinal HTML/CSS korunur. */
 (() => {
-  const key = window.DC_INSTAGRAM_KEY || 'dcYapiInstagramPosts';
-  const defaults = window.DC_DEFAULT_INSTAGRAM_POSTS || [];
+  'use strict';
   const form = document.getElementById('instagramPostsForm');
   const status = document.getElementById('instagramStatus');
-  const inputs = [1, 2, 3, 4, 5].map(number => document.getElementById(`instagramPost${number}`));
   const count = document.getElementById('instagramCount');
-  if (!form || inputs.some(input => !input)) return;
+  const tab = document.querySelector('.admin-tab[data-panel="instagramPanel"]');
+  const inputs = Array.from({length: 5}, (_,i) => document.getElementById(`instagramPost${i+1}`));
+  if (!form || inputs.some(x=>!x)) return;
 
-  function normalizePost(value) {
+  const setStatus = (text) => { if (status) status.textContent = text; };
+  function normalize(value) {
     try {
-      const url = new URL(String(value || '').trim());
-      if (url.protocol !== 'https:' || !['instagram.com', 'www.instagram.com'].includes(url.hostname.toLowerCase())) return '';
-      if (!/^\/(?:p|reel|tv)\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)) return '';
-      return `https://www.instagram.com${url.pathname.endsWith('/') ? url.pathname : `${url.pathname}/`}`;
-    } catch {
-      return '';
+      const u = new URL(String(value || '').trim());
+      if (u.protocol !== 'https:' || !['www.instagram.com','instagram.com'].includes(u.hostname.toLowerCase()) || u.username || u.password) return '';
+      if (!/^\/(?:p|reel|tv)\/[A-Za-z0-9_-]+\/?$/.test(u.pathname)) return '';
+      return 'https://www.instagram.com' + (u.pathname.endsWith('/') ? u.pathname : u.pathname + '/');
+    } catch { return ''; }
+  }
+  async function readJson(url, options = {}) {
+    const response = await fetch(url, {credentials:'same-origin', cache:'no-store', ...options});
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || data.ok !== true) throw new Error(data?.error || `HTTP ${response.status}`);
+    return data;
+  }
+  async function load() {
+    try {
+      const data = await readJson('/api/admin/instagram');
+      const urls = (data.items || []).filter(item=>item.is_active === 1).map(item=>item.post_url);
+      inputs.forEach((input,index)=>{input.value=urls[index]||'';input.setCustomValidity('');});
+      if (count) count.textContent = String(urls.length);
+      setStatus('D1 veritabanından ' + urls.length + ' bağlantı yüklendi. En yeni gönderi 1. sıradadır.');
+    } catch (error) {
+      setStatus('Instagram bağlantıları yüklenemedi: ' + error.message);
     }
   }
-
-  function readPosts() {
-    try {
-      const stored = localStorage.getItem(key);
-      const value = stored === null ? defaults : JSON.parse(stored);
-      return Array.isArray(value) ? value : defaults;
-    } catch {
-      return defaults;
-    }
+  async function csrfToken() {
+    const response = await fetch('/api/admin/content', {credentials:'same-origin',cache:'no-store'});
+    if (!response.ok || new URL(response.url).pathname !== '/api/admin/content') throw new Error('Yönetici oturumu bulunamadı.');
+    const html = await response.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const token = doc.querySelector('meta[name="csrf-token"]')?.content || '';
+    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new Error('CSRF doğrulaması alınamadı.');
+    return token;
   }
-
-  function render() {
-    const posts = readPosts();
-    inputs.forEach((input, index) => {
-      input.value = posts[index] || '';
-      input.setCustomValidity('');
-    });
-    if (count) count.textContent = String(posts.length);
-    if (status) status.textContent = 'Sıralama: en yeni gönderi 1. sırada, en eski gönderi 5. sırada. Yalnızca herkese açık gönderi ve Reels bağlantıları kullanılabilir.';
-  }
-
-  inputs.forEach(input => input.addEventListener('input', () => input.setCustomValidity('')));
-  form.addEventListener('submit', event => {
+  inputs.forEach(input=>input.addEventListener('input',()=>input.setCustomValidity('')));
+  form.addEventListener('submit', async (event)=>{
     event.preventDefault();
-    const urls = [];
-    for (let index = 0; index < inputs.length; index += 1) {
-      const input = inputs[index];
+    const urls=[];
+    for (const input of inputs) {
       input.setCustomValidity('');
-      const url = normalizePost(input.value);
+      const url=normalize(input.value);
       if (!url) {
-        input.setCustomValidity('Instagram gönderisinin HTTPS bağlantısını girin. /p/, /reel/ veya /tv/ bağlantısı olmalı.');
+        input.setCustomValidity('Geçerli bir Instagram gönderi veya Reel HTTPS bağlantısı girin.');
         input.reportValidity();
         return;
       }
       if (urls.includes(url)) {
-        input.setCustomValidity('Aynı gönderi bağlantısı birden fazla kullanılamaz.');
+        input.setCustomValidity('Aynı gönderi bağlantısı iki kez kullanılamaz.');
         input.reportValidity();
         return;
       }
       urls.push(url);
     }
-
+    const button=form.querySelector('[type="submit"]');
+    if (button) button.disabled=true;
+    setStatus('Bağlantılar kaydediliyor…');
     try {
-      localStorage.setItem(key, JSON.stringify(urls));
-      if (count) count.textContent = String(urls.length);
-      if (status) status.textContent = 'Beş Instagram gönderisi kaydedildi. Siteyi aynı tarayıcıda yenileyince yeni sıralama görüntülenir.';
-    } catch {
-      if (status) status.textContent = 'Tarayıcı depolaması kapalı veya dolu; gönderi bağlantıları kaydedilemedi.';
-    }
+      const token=await csrfToken();
+      await readJson('/api/admin/instagram', {
+        method:'PUT',
+        headers: {'Content-Type':'application/json','X-CSRF-Token':token},
+        body: JSON.stringify({urls})
+      });
+      if (count) count.textContent=String(urls.length);
+      setStatus('5 Instagram bağlantısı Cloudflare D1 veritabanına kaydedildi. Sitede tüm ziyaretçiler aynı sırayı görür.');
+    } catch (error) {
+      setStatus('Kayıt başarısız: ' + error.message);
+    } finally { if (button) button.disabled=false; }
   });
-
-  window.addEventListener('storage', event => {
-    if (event.key === key) render();
-  });
-  render();
+  tab?.addEventListener('click',()=>{void load();});
+  // Already-signed-in admin opening page with Instagram tab selected.
+  if (tab?.classList.contains('active')) void load();
 })();
+
+
+
