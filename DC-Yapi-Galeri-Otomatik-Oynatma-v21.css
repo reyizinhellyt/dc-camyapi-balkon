@@ -1,0 +1,41 @@
+/* DC Yapı Galeri v21 — sessiz otomatik oynatma; önceki CSS üzerine ekleme. */
+/* DC Yapı - video galerisi v20. Yalnizca video kartlarini ve tam ekran videoyu etkiler. */
+.gallery-image:has(.gallery-video-play) { cursor: pointer; }
+.gallery-video-play {
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  z-index:3;width:62px;height:62px;display:grid;place-items:center;
+  background:rgba(13,32,34,.84);color:white;border:1px solid #fff8;
+  border-radius:50%;font-size:24px;padding-left:4px;pointer-events:none;
+  box-shadow:0 12px 36px #0007;
+}
+.gallery-lightbox .lightbox-stage video.lightbox-video {
+  display:block;max-width:min(100%,1100px);max-height:calc(100dvh - 170px);
+  width:auto;height:auto;aspect-ratio:auto;object-fit:contain;
+  background:black;border-radius:3px;box-shadow:0 16px 54px #0008;
+}
+.gallery-lightbox .lightbox-stage video.lightbox-video[hidden],
+.gallery-lightbox .lightbox-stage img[hidden] { display:none !important; }
+.gallery-video-admin {margin-bottom:14px;}
+.gallery-video-admin #galleryVideoFieldsV16[hidden] {display:none!important;}
+.gallery-video-admin input[type=file],.gallery-video-admin input[type=text],
+.gallery-video-admin select {box-sizing:border-box;max-width:100%;width:100%;}
+@media(max-width:650px) {
+  .gallery-video-play{width:52px;height:52px;font-size:21px;}
+  .gallery-lightbox .lightbox-stage video.lightbox-video{max-height:calc(100dvh - 150px);}
+}
+
+/* Video kartı tamamen aynı ölçüde kalır; video görsel alanını doldurur. */
+.gallery-image:has(video.gallery-video-preview) {cursor:pointer;}
+.gallery-image video.gallery-video-preview {
+  position:absolute; inset:0; z-index:2;
+  display:block; width:100%; height:100%;
+  object-fit:cover; background:#10191b;
+  pointer-events:none;
+}
+.gallery-image .gallery-video-indicator {
+  position:absolute; z-index:3; right:10px; bottom:10px;
+  padding:5px 9px; border-radius:4px;
+  background:rgba(16,29,31,.84); color:#fff;
+  font-size:10px; font-weight:650; letter-spacing:.025em;
+  pointer-events:none;
+}
